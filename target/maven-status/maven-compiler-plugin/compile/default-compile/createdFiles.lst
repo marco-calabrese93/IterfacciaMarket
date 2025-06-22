@@ -1,5 +1,5 @@
+market/RichiesteNonAssegnate.class
 market/DBManager.class
+market/InserimentoRichiesta.class
+market/TempoMedioTecnici.class
 market/App.class
-market/RichiesteNonAssegnateHandler.class
-market/InserimentoRichiestaHandler.class
-market/TempoMedioTecniciHandler.class

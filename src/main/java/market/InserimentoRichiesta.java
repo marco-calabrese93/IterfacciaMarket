@@ -21,6 +21,7 @@ public class InserimentoRichiesta {
             System.out.print("ID ordinante: ");
             int ordinante = Integer.parseInt(scanner.nextLine());
 
+            // Se vuoi gestire un tecnico, tieni il valore e lo assegni dopo
             System.out.print("ID tecnico (0 se non assegnato): ");
             int tecnico = Integer.parseInt(scanner.nextLine());
             Integer tecnicoParam = (tecnico > 0 ? tecnico : null);
@@ -28,33 +29,36 @@ public class InserimentoRichiesta {
             System.out.print("Note: ");
             String note = scanner.nextLine();
 
-            // 3. Inserimento richiesta tramite procedura 1.0
-            CallableStatement csInsert = conn.prepareCall("{CALL InserisciRichiesta(?, ?, ?, ?, ?, ?)}");
+            // 3. Inserimento richiesta tramite procedura InserisciRichiesta
+            CallableStatement csInsert = conn.prepareCall("{ CALL InserisciRichiesta(?, ?, ?, ?, ?) }");
             csInsert.setInt(1, numero);
             csInsert.setInt(2, ordinante);
-            if (tecnicoParam != null) {
-                csInsert.setInt(3, tecnicoParam);
-            } else {
-                csInsert.setNull(3, Types.INTEGER);
-            }
-            csInsert.setInt(4, categoriaId);
-            csInsert.setString(5, note);
-            csInsert.setNull(6, Types.INTEGER);      
+            csInsert.setInt(3, categoriaId);
+            csInsert.setString(4, note);
+            csInsert.registerOutParameter(5, Types.INTEGER);
             csInsert.execute();
 
-            // Recupero id con LAST_INSERT_ID()
-            int idRichiesta;
-            try (Statement st = conn.createStatement();
-                 ResultSet rsLast = st.executeQuery("SELECT LAST_INSERT_ID()")) {
-                rsLast.next();
-                idRichiesta = rsLast.getInt(1);
-            }
+            // 4. Recupero ID restituito dalla procedura
+            int idRichiesta = csInsert.getInt(5);
             System.out.println("Richiesta inserita con ID: " + idRichiesta);
 
-            // 4. Recupero e valorizzazione delle caratteristiche specifiche
+            // 5. (Opzionale) Assegno il tecnico se fornito
+            if (tecnicoParam != null) {
+                CallableStatement csAssign = conn.prepareCall(
+                  "{ CALL AssegnazioneTecnicoToRichiesta(?, ?) }"
+                );
+                csAssign.setInt(1, idRichiesta);
+                csAssign.setInt(2, tecnicoParam);
+                csAssign.execute();
+            }
+
+            // 6. Recupero e valorizzazione delle caratteristiche specifiche
             PreparedStatement ps = conn.prepareStatement(
-                "SELECT c.ID, c.nome FROM caratteristica c " +
-                "JOIN possiede p ON c.ID = p.ID_caratteristica WHERE p.ID_categoria = ?");
+                "SELECT c.ID, c.nome "
+              + "FROM caratteristica c "
+              + "JOIN possiede p ON c.ID = p.ID_caratteristica "
+              + "WHERE p.ID_categoria = ?"
+            );
             ps.setInt(1, categoriaId);
             ResultSet rs = ps.executeQuery();
 
@@ -64,7 +68,7 @@ public class InserimentoRichiesta {
                 System.out.print("Valore per " + nomeCar + ": ");
                 String valore = scanner.nextLine();
 
-                CallableStatement csVal = conn.prepareCall("{CALL ValorizzaCaratteristica(?, ?, ?)}");
+                CallableStatement csVal = conn.prepareCall("{ CALL ValorizzaCaratteristica(?, ?, ?) }");
                 csVal.setInt(1, idRichiesta);
                 csVal.setInt(2, idCar);
                 csVal.setString(3, valore);
@@ -99,7 +103,7 @@ public class InserimentoRichiesta {
                 int id = rs.getInt("ID");
                 String nome = rs.getString("nome");
                 boolean foglia = rs.getBoolean("foglia");
-                System.out.printf("[%d] %s %s\n", id, nome, foglia ? "(foglia)" : "");
+                System.out.printf("[%d] %s %s%n", id, nome, foglia ? "(foglia)" : "");
                 ids.add(id);
             }
 
@@ -110,12 +114,19 @@ public class InserimentoRichiesta {
                 continue;
             }
 
-            PreparedStatement check = conn.prepareStatement("SELECT foglia FROM categoria WHERE ID = ?");
+            PreparedStatement check = conn.prepareStatement(
+              "SELECT foglia FROM categoria WHERE ID = ?"
+            );
             check.setInt(1, input);
             ResultSet r = check.executeQuery();
-            if (r.next() && r.getBoolean("foglia")) return input;
+            if (r.next() && r.getBoolean("foglia")) {
+                return input;
+            }
             scelta = input;
         }
     }
-}
 
+    public static void main(String[] args) {
+        esegui();
+    }
+}
